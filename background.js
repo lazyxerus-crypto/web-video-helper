@@ -285,10 +285,6 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
       if(sender.frameId!==0)return {ok:false};
       return advance(tabId,sender.tab.url,message.type==='WVFS_PREV'?-1:1);
     }
-    if(message?.type==='WVFS_AUTOPLAY_MUTED'){
-      await dispatch(tabId,{type:'WVFS_AUTOPLAY_NOTICE'},{frameId:0}).catch(()=>{});
-      return {ok:true};
-    }
     if(message?.type==='WVFS_ENDED'){
       const r=frames.get(tabId)?.get(sender.frameId);
       if(!r||r.doc!==sender.documentId||r.duration<60||r.currentTime<r.duration-5)
