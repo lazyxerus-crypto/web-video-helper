@@ -183,7 +183,7 @@ chrome.tabs.onUpdated.addListener((id,change,tab)=>{
   if(change.url || change.status==='complete'){
     stateFor(id).then(s=>{
       if(s?.enabled&&tab.url&&originOf(tab.url)!==s.origin){
-        chrome.storage.session.remove(tabKey(id)).catch(()=>{});
+        saveState(id,{enabled:false,origin:originOf(tab.url)}).catch(()=>{});
         chrome.action.setBadgeText({tabId:id,text:''}).catch(()=>{});
       }
     }).catch(()=>{});
