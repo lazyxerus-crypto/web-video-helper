@@ -263,11 +263,12 @@ function makeControls(){
       max-width:min(95vw,680px);padding:0;background:transparent;border:0;
       border-radius:0;box-shadow:none}
     .bar button{box-sizing:border-box;cursor:pointer;border-radius:8px;color:#fff;
-      background:#273348;border:1px solid #ffffff77;font:12px system-ui,sans-serif;
-      padding:9px 10px;white-space:nowrap}
+      background:#273348;border:0;height:36px;font:12px system-ui,sans-serif;
+      padding:0 10px;white-space:nowrap}
     button:hover{background:#354662!important}button:focus-visible,input:focus-visible{outline:2px solid #a5d8ff}
-    .speed{display:flex;gap:8px;align-items:center;background:#283348;border-radius:7px;
-      padding:6px 9px;font:12px system-ui,sans-serif;white-space:nowrap}
+    .speed{box-sizing:border-box;display:flex;gap:8px;align-items:center;height:36px;
+      background:#283348;border:0;border-radius:8px;padding:0 9px;
+      font:12px system-ui,sans-serif;white-space:nowrap}
     #speed{width:142px;cursor:pointer;accent-color:#72cbff}
     #speed-value{font:700 13px system-ui,sans-serif;min-width:43px;text-align:right}
     #msg{display:none;position:absolute;right:0;top:100%;margin-top:5px;
