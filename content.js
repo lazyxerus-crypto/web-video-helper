@@ -95,14 +95,36 @@ async function tryAutoplay(v){
     await ensureResume(v);
     if(!enabled||!v.isConnected||v.ended)return;
     speed(v);
+    // 1차: 음소거를 사용하지 않고 소리 있는 상태 그대로 자동재생한다.
+    v.muted=false;
     try{
       await v.play();
       attemptedAutoPlay.add(v);
+      return;
     }catch(e){
-      if(e?.name==='NotSupportedError')noAutoplay.add(v);
-      // 소리 있는 자동재생이 Chrome 정책으로 거부되면 재시도만 중단한다.
-      // 음소거로 우회하거나 별도 알림을 띄우지 않는다.
-      if(e?.name==='NotAllowedError')noAutoplay.add(v);
+      if(e?.name==='NotSupportedError'){
+        noAutoplay.add(v);
+        return;
+      }
+      if(e?.name!=='NotAllowedError'){
+        return;
+      }
+    }
+
+    // 2차: Chrome이 소리 있는 자동재생을 거부하면 영상만 멈추지 않게
+    // 일시적으로 무음 자동재생하고, 재생이 시작되면 즉시 소리 복구를 시도한다.
+    try{
+      v.muted=true;
+      await v.play();
+      attemptedAutoPlay.add(v);
+      try{
+        v.muted=false;
+        await v.play();
+      }catch{
+        v.muted=true;
+      }
+    }catch(e){
+      if(e?.name==='NotAllowedError'||e?.name==='NotSupportedError')noAutoplay.add(v);
     }
   }finally{
     autoPlayRunning.delete(v);
