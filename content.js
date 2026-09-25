@@ -439,6 +439,11 @@ function makeControls(){
 chrome.runtime.onMessage.addListener((m,sender,respond)=>{
   if(m?.type==='WVFS_SETTINGS'){settings(m.state);respond({ok:true});}
   else if(m?.type==='WVFS_PROBE'){if(enabled)scan();respond({ok:true});}
+  else if(m?.type==='WVFS_EPISODE_CHANGED'){
+    for(const v of allVideos())resetResume(v);
+    if(enabled)setTimeout(scan,400);
+    respond({ok:true});
+  }
   else if(m?.type==='WVFS_NATIVE_LINK'&&TOP){respond(nativeLink(m.direction));}
   else if(m?.type==='WVFS_NATIVE_NAVIGATE'&&TOP){respond(nativeNavigate(m.direction,m.url));}
   else if(m?.type==='WVFS_AUTOPLAY_NOTICE'&&TOP){controller?.noticeMuted();respond({ok:true});}
