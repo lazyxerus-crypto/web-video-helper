@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "웹 영상 도우미: 배속 · 전체화면 · 연속재생",
-  "version": "6.0.1",
+  "version": "6.0.2",
   "description": "확장 프로그램 아이콘으로 웹 전체화면 실행, 85초 스킵·이전/다음 화·1.00~2.00배속(0.05 간격), 자동 다음 화 및 자동재생",
   "permissions": [
     "storage",
