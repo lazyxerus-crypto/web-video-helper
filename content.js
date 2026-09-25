@@ -80,7 +80,7 @@ function saveCheckpoint(v,force=false){
   if(!force && now-(lastCheckpoint.get(v)||0)<RESUME_SAVE_INTERVAL)return;
   if(!Number.isFinite(v.currentTime)||v.currentTime<5||v.currentTime>=v.duration-3)return;
   lastCheckpoint.set(v,now);
-  send({type:'WVFS_RESUME_SAVE',episode:info.episode,
+  return send({type:'WVFS_RESUME_SAVE',episode:info.episode,
     position:v.currentTime,duration:v.duration});
 }
 // Chrome의 소리 있는 autoplay가 막히면 무음 재생을 시도하고 상단 바에 안내한다.
@@ -439,6 +439,11 @@ function makeControls(){
 chrome.runtime.onMessage.addListener((m,sender,respond)=>{
   if(m?.type==='WVFS_SETTINGS'){settings(m.state);respond({ok:true});}
   else if(m?.type==='WVFS_PROBE'){if(enabled)scan();respond({ok:true});}
+  else if(m?.type==='WVFS_CHECKPOINT_FLUSH'){
+    const saves=enabled?allVideos().map(v=>saveCheckpoint(v,true)).filter(Boolean):[];
+    Promise.all(saves).then(()=>respond({ok:true})).catch(()=>respond({ok:false}));
+    return true;
+  }
   else if(m?.type==='WVFS_EPISODE_CHANGED'){
     for(const v of allVideos())resetResume(v);
     if(enabled)setTimeout(scan,400);
