@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "웹 영상 도우미: 배속 · 전체화면 · 연속재생",
+  "version": "6.0.0",
+  "description": "확장 프로그램 아이콘으로 웹 전체화면 실행, 85초 스킵·이전/다음 화·1.00~2.00배속(0.05 간격), 자동 다음 화 및 자동재생",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    }
+  ],
+  "action": {
+    "default_title": "웹 영상 도우미 열기/닫기",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "toggle-web-fullscreen": {
+      "suggested_key": {
+        "default": "Alt+Shift+V"
+      },
+      "description": "웹 영상 전체화면 켜기/끄기"
+    }
+  }
+}
