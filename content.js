@@ -95,36 +95,25 @@ async function tryAutoplay(v){
     await ensureResume(v);
     if(!enabled||!v.isConnected||v.ended)return;
     speed(v);
-    // 1차: 음소거를 사용하지 않고 소리 있는 상태 그대로 자동재생한다.
-    v.muted=false;
     try{
       await v.play();
       attemptedAutoPlay.add(v);
-      return;
     }catch(e){
-      if(e?.name==='NotSupportedError'){
-        noAutoplay.add(v);
-        return;
-      }
       if(e?.name!=='NotAllowedError'){
+        // 별도 이유(아직 로딩, 재생소스 교체 등)라면 다음 scan에서 재시도.
+        if(e?.name==='NotSupportedError')noAutoplay.add(v);
         return;
       }
-    }
-
-    // 2차: Chrome이 소리 있는 자동재생을 거부하면 영상만 멈추지 않게
-    // 일시적으로 무음 자동재생하고, 재생이 시작되면 즉시 소리 복구를 시도한다.
-    try{
+      // 오디오 자동재생은 브라우저 정책에 따라 차단될 수 있음.
+      // 음소거된 자동재생만 허용되면 영상을 끊기지 않게 재생한다.
       v.muted=true;
-      await v.play();
-      attemptedAutoPlay.add(v);
       try{
-        v.muted=false;
         await v.play();
-      }catch{
-        v.muted=true;
+        attemptedAutoPlay.add(v);
+        send({type:'WVFS_AUTOPLAY_MUTED'});
+      }catch(err){
+        if(err?.name==='NotAllowedError')noAutoplay.add(v);
       }
-    }catch(e){
-      if(e?.name==='NotAllowedError'||e?.name==='NotSupportedError')noAutoplay.add(v);
     }
   }finally{
     autoPlayRunning.delete(v);
@@ -132,7 +121,8 @@ async function tryAutoplay(v){
   }
 }
 
-let extensionContextInvalidated=false;
+const send=msg=>chrome.runtime.sendMessage(msg).catch(()=>null);
+
 function stopAfterExtensionInvalidation(){
   if(extensionContextInvalidated)return;
   extensionContextInvalidated=true;
@@ -515,11 +505,15 @@ function makeControls(){
     if(shadow.activeElement!==$('speed'))$('speed').value=String(rate);
     $('speed-value').textContent=rate.toFixed(2)+'×';
   }
+  function noticeMuted(){
+    toast('크롬이 소리 있는 자동재생을 차단하여 음소거 재생했습니다. 소리는 영상 플레이어에서 켜 주세요.',10000);
+  }
   return {update,sync,noticeMuted};
 }
 chrome.runtime.onMessage.addListener((m,sender,respond)=>{
   if(m?.type==='WVFS_SETTINGS'){settings(m.state);respond({ok:true});}
   else if(m?.type==='WVFS_PROBE'){if(enabled)scan();respond({ok:true});}
+  else if(m?.type==='WVFS_AUTOPLAY_NOTICE'&&TOP){controller?.noticeMuted();respond({ok:true});}
   else if(m?.type==='WVFS_CHECKPOINT_FLUSH'){
     const saves=enabled?allVideos().map(v=>saveCheckpoint(v,true)).filter(Boolean):[];
     Promise.all(saves).then(()=>respond({ok:true})).catch(()=>respond({ok:false}));
