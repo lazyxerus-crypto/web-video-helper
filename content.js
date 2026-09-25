@@ -123,35 +123,6 @@ async function tryAutoplay(v){
 
 const send=msg=>chrome.runtime.sendMessage(msg).catch(()=>null);
 
-function stopAfterExtensionInvalidation(){
-  if(extensionContextInvalidated)return;
-  extensionContextInvalidated=true;
-  enabled=false;
-  try{observer?.disconnect();}catch{}
-  observer=null;
-  clearInterval(timer);
-  timer=null;
-  try{controller?.update();}catch{}
-}
-function isExtensionContextInvalidated(error){
-  return /Extension context invalidated|Extension context was invalidated/i.test(String(error?.message||error));
-}
-function send(msg){
-  if(extensionContextInvalidated)return Promise.resolve(null);
-  try{
-    if(!chrome?.runtime?.id){
-      stopAfterExtensionInvalidation();
-      return Promise.resolve(null);
-    }
-    return Promise.resolve(chrome.runtime.sendMessage(msg)).catch(error=>{
-      if(isExtensionContextInvalidated(error))stopAfterExtensionInvalidation();
-      return null;
-    });
-  }catch(error){
-    if(isExtensionContextInvalidated(error))stopAfterExtensionInvalidation();
-    return Promise.resolve(null);
-  }
-}
 const onReady=fn=>{
   if(document.documentElement)fn();
   else document.addEventListener('DOMContentLoaded',fn,{once:true});
