@@ -260,8 +260,8 @@ function makeControls(){
   shadow.innerHTML=`<style>
     :host{all:initial;font-family:system-ui,-apple-system,sans-serif;color:white}
     .bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center;
-      max-width:min(95vw,680px);padding:7px;background:#101827ea;border:1px solid #94a3b899;
-      border-radius:11px;box-shadow:0 5px 24px #000a}
+      max-width:min(95vw,680px);padding:0;background:transparent;border:0;
+      border-radius:0;box-shadow:none}
     .bar button{box-sizing:border-box;cursor:pointer;border-radius:8px;color:#fff;
       background:#273348;border:1px solid #ffffff77;font:12px system-ui,sans-serif;
       padding:9px 10px;white-space:nowrap}
