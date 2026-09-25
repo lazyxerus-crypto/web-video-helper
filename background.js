@@ -180,6 +180,34 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
       return toggle(sender.tab);
     }
     if(!permitted(sender,state))return {ok:false,error:'크롬 확장 프로그램 아이콘을 눌러 활성화해 주세요.'};
+    if(message?.type==='WVFS_RESUME_GET'){
+      const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
+      if(!episode||!key)return {ok:false};
+      await resumeWrites.get(key)?.catch(()=>{});
+      const saved=(await chrome.storage.local.get(key))[key];
+      const fresh=saved && Number.isFinite(saved.position) &&
+        Number.isFinite(saved.duration) && Number.isFinite(saved.updatedAt) &&
+        Date.now()-saved.updatedAt<RESUME_MAX_AGE;
+      return {ok:true,episode,checkpoint:fresh?saved:null};
+    }
+    if(message?.type==='WVFS_RESUME_SAVE'){
+      const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
+      if(!episode||!key||message.episode!==episode)return {ok:false};
+      const position=Number(message.position),duration=Number(message.duration);
+      if(!Number.isFinite(position)||!Number.isFinite(duration)||duration<60||
+         position<5||position>=duration-3)return {ok:false};
+      await queueResumeWrite(key,()=>chrome.storage.local.set({
+        [key]:{position:Math.round(position*10)/10,duration:Math.round(duration*10)/10,updatedAt:Date.now()}
+      }));
+      pruneResume().catch(()=>{});
+      return {ok:true};
+    }
+    if(message?.type==='WVFS_RESUME_COMPLETE'){
+      const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
+      if(!episode||!key||message.episode!==episode)return {ok:false};
+      await queueResumeWrite(key,()=>chrome.storage.local.remove(key));
+      return {ok:true};
+    }
     if(message?.type==='WVFS_REPORT'){
       if(!frames.has(tabId))frames.set(tabId,new Map());
       const r=message.report||{};
