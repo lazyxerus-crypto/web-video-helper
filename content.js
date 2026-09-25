@@ -272,6 +272,44 @@ function skip(){
     return {ok:true,message:'85초 건너뛰기 완료'};
   }catch{return {ok:false,error:'이 영상은 현재 위치 이동을 허용하지 않습니다.'};}
 }
+function parseOhliEpisode(href){
+  try{
+    const u=new URL(href);
+    if(u.hostname!=='ani.ohli24.com'||!/^\/e\//.test(u.pathname))return null;
+    const label=decodeURIComponent(u.pathname.slice(3).replace(/\/$/,'')).trim();
+    const match=label.match(/^(.*?)\s+(\d+)\s*화\s*(?:\((完)\))?$/u);
+    if(!match)return null;
+    return {
+      url:u.href,
+      title:match[1].trim(),
+      number:Number(match[2]),
+      complete:!!match[3]
+    };
+  }catch{return null;}
+}
+function ohliLink(direction){
+  const current=parseOhliEpisode(location.href);
+  const siteReady=location.hostname==='ani.ohli24.com' && !!current;
+  if(!siteReady)return {ok:true,siteReady:false,href:null};
+  const targetNumber=current.number+direction;
+  if(targetNumber<1)return {ok:true,siteReady:true,href:null};
+  const links=[...document.querySelectorAll('a[href]')]
+    .map(a=>parseOhliEpisode(a.href))
+    .filter(Boolean)
+    .filter(item=>item.title===current.title && item.number===targetNumber);
+  const unique=[...new Map(links.map(item=>[item.url,item])).values()];
+  unique.sort((a,b)=>Number(b.complete)-Number(a.complete));
+  return {ok:true,siteReady:true,href:unique[0]?.url||null};
+}
+function ohliNavigate(direction,expected){
+  const result=ohliLink(direction);
+  if(!result.href||result.href!==expected)return {ok:false,error:'회차 링크가 변경되었습니다.'};
+  const link=[...document.querySelectorAll('a[href]')]
+    .find(a=>{try{return new URL(a.href).href===expected;}catch{return false;}});
+  if(!link)return {ok:false};
+  link.click();
+  return {ok:true,url:expected};
+}
 function nativeLink(direction){
   const siteReady=location.hostname==='kf.carsstore365.com' &&
     /\/watch\/?$/.test(location.pathname) && !!document.getElementById('player-area');
@@ -456,6 +494,8 @@ chrome.runtime.onMessage.addListener((m,sender,respond)=>{
     respond({ok:true});
   }
   else if(m?.type==='WVFS_NATIVE_LINK'&&TOP){respond(nativeLink(m.direction));}
+  else if(m?.type==='WVFS_OHLI_LINK'&&TOP){respond(ohliLink(m.direction));}
+  else if(m?.type==='WVFS_OHLI_NAVIGATE'&&TOP){respond(ohliNavigate(m.direction,m.url));}
   else if(m?.type==='WVFS_NATIVE_NAVIGATE'&&TOP){respond(nativeNavigate(m.direction,m.url));}
   else if(m?.type==='WVFS_AUTOPLAY_NOTICE'&&TOP){controller?.noticeMuted();respond({ok:true});}
   else if(m?.type==='WVFS_MEDIA_COMMAND'){
