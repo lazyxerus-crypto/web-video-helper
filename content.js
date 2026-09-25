@@ -9,6 +9,80 @@ const playbackSeen=new WeakSet();
 const attemptedAutoPlay=new WeakSet();
 const autoPlayRunning=new WeakSet();
 const noAutoplay=new WeakSet();
+// Each HTML5 video holds the episode resolved from its TOP-LEVEL tab URL.
+const resumeJobs=new WeakMap();
+const resumeInfo=new WeakMap();
+const resumeGeneration=new WeakMap();
+const restoring=new WeakSet();
+const finishedVideos=new WeakSet();
+const lastCheckpoint=new WeakMap();
+const RESUME_SAVE_INTERVAL=5000;
+function resetResume(v){
+  resumeGeneration.set(v,(resumeGeneration.get(v)||0)+1);
+  resumeJobs.delete(v);resumeInfo.delete(v);lastCheckpoint.delete(v);
+  finishedVideos.delete(v);attemptedAutoPlay.delete(v);noAutoplay.delete(v);
+  playbackSeen.delete(v);
+}
+function eligibleForResume(v){
+  return enabled && v?.isConnected && v.readyState>=1 &&
+    Number.isFinite(v.duration) && v.duration>=60 &&
+    (areaOf(v)>=4000 || v.videoWidth>0);
+}
+function ensureResume(v){
+  if(!eligibleForResume(v))return Promise.resolve();
+  if(resumeJobs.has(v))return resumeJobs.get(v);
+  const generation=resumeGeneration.get(v)||0;
+  const job=(async()=>{
+    const answer=await send({type:'WVFS_RESUME_GET'});
+    if(!answer?.ok||!enabled||!v.isConnected||
+       (resumeGeneration.get(v)||0)!==generation)return;
+    resumeInfo.set(v,{episode:answer.episode});
+    const checkpoint=answer.checkpoint;
+    if(!checkpoint || !Number.isFinite(checkpoint.position) ||
+       !Number.isFinite(checkpoint.duration))return;
+    // Avoid applying the position of a different stream to a changed episode.
+    if(Math.abs(v.duration-checkpoint.duration)>Math.max(30,v.duration*.08))return;
+    if(checkpoint.position<5 || checkpoint.position>=v.duration-5)return;
+    // Do not override a position the viewer has already chosen manually.
+    if(v.currentTime>5)return;
+    let target=Math.max(0,Math.min(checkpoint.position,v.duration-3));
+    try{
+      if(v.seekable.length){
+        let closest=null,delta=Infinity;
+        for(let i=0;i<v.seekable.length;i++){
+          const start=v.seekable.start(i),end=v.seekable.end(i);
+          const candidate=Math.max(start,Math.min(target,end));
+          if(Math.abs(candidate-target)<delta){closest=candidate;delta=Math.abs(candidate-target);}
+        }
+        if(closest!==null)target=closest;
+      }
+      if(target<5)return;
+      restoring.add(v);
+      const seeked=new Promise(resolve=>{
+        const done=()=>{v.removeEventListener('seeked',done);resolve();};
+        v.addEventListener('seeked',done,{once:true});
+        setTimeout(done,1500);
+      });
+      v.currentTime=target;
+      await seeked;
+    }catch{
+      // A player may reject seeking until it has loaded more data.
+    }finally{restoring.delete(v);}
+  })();
+  resumeJobs.set(v,job);
+  return job;
+}
+function saveCheckpoint(v,force=false){
+  if(!eligibleForResume(v)||restoring.has(v)||finishedVideos.has(v)||v.ended)return;
+  const info=resumeInfo.get(v);
+  if(!info?.episode)return;  // Never save under the third-party iframe URL.
+  const now=Date.now();
+  if(!force && now-(lastCheckpoint.get(v)||0)<RESUME_SAVE_INTERVAL)return;
+  if(!Number.isFinite(v.currentTime)||v.currentTime<5||v.currentTime>=v.duration-3)return;
+  lastCheckpoint.set(v,now);
+  send({type:'WVFS_RESUME_SAVE',episode:info.episode,
+    position:v.currentTime,duration:v.duration});
+}
 // Chrome의 소리 있는 autoplay가 막히면 무음 재생을 시도하고 상단 바에 안내한다.
 async function tryAutoplay(v){
   if(!enabled||!v||!v.isConnected||!v.paused||v.ended||v.error||
