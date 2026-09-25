@@ -25,7 +25,7 @@ async function tellFrames(tabId,msg){try{await dispatch(tabId,msg);}catch{}}
 async function stateForReady(sender){
   const tabId=sender.tab.id, origin=originOf(sender.tab.url), prefs=await prefsFor();
   let state=await stateFor(tabId);
-  // On navigation to a different site, use the globally saved activation preference.
+  // New tabs and unrelated websites are off; same-origin episode changes keep this tab's activation.
   if(!state || state.origin!==origin){
     state={enabled:false,origin};
     await saveState(tabId,state);
@@ -45,11 +45,6 @@ async function toggle(tab){
   return {ok:true,enabled};
 }
 chrome.action.onClicked.addListener(tab=>toggle(tab).catch(console.warn));
-chrome.commands.onCommand.addListener(async name=>{
-  if(name!=='toggle-web-fullscreen')return;
-  const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
-  await toggle(tab).catch(console.warn);
-});
 // Numeric fallback is only used for generic sites without first-class episode links.
 function changeSlug(href,direction){
   try{
