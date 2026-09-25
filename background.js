@@ -6,6 +6,54 @@ const DEFAULTS = {speed:1.5};
 const frames = new Map();
 const navLocks = new Set();
 const recentMoves = new Map();
+// Resume checkpoints are local-only and keyed to the TOP-LEVEL episode URL.
+// Do not key a series to its shared third-party iframe player URL.
+const RESUME_PREFIX = 'wvfs_resume_v1:';
+const RESUME_MAX = 250;
+const RESUME_MAX_AGE = 120*24*60*60*1000;
+const resumeWrites = new Map();
+let lastResumePrune = 0;
+function episodeKey(href){
+  try{
+    const u = new URL(href);
+    if(!/^https?:$/.test(u.protocol))return null;
+    u.hash = '';
+    u.username = '';
+    u.password = '';
+    for(const name of [...u.searchParams.keys()]){
+      if(/^utm_|^(fbclid|gclid|msclkid)$/i.test(name))u.searchParams.delete(name);
+    }
+    u.searchParams.sort();
+    return u.href;
+  }catch{return null;}
+}
+function resumeStorageKey(href){
+  const episode=episodeKey(href);
+  return episode?RESUME_PREFIX+encodeURIComponent(episode):null;
+}
+async function queueResumeWrite(key,task){
+  const prior=resumeWrites.get(key)||Promise.resolve();
+  const current=prior.catch(()=>{}).then(task);
+  resumeWrites.set(key,current);
+  try{return await current;}
+  finally{if(resumeWrites.get(key)===current)resumeWrites.delete(key);}
+}
+async function pruneResume(){
+  if(Date.now()-lastResumePrune<24*60*60*1000)return;
+  lastResumePrune=Date.now();
+  try{
+    const all=await chrome.storage.local.get(null),valid=[],remove=[];
+    for(const [key,entry] of Object.entries(all)){
+      if(!key.startsWith(RESUME_PREFIX))continue;
+      if(!entry||!Number.isFinite(entry.position)||!Number.isFinite(entry.updatedAt)||
+         Date.now()-entry.updatedAt>RESUME_MAX_AGE)remove.push(key);
+      else valid.push({key,updatedAt:entry.updatedAt});
+    }
+    valid.sort((a,b)=>b.updatedAt-a.updatedAt);
+    remove.push(...valid.slice(RESUME_MAX).map(entry=>entry.key));
+    if(remove.length)await chrome.storage.local.remove([...new Set(remove)]);
+  }catch{lastResumePrune=0;}
+}
 function validSpeed(n){return typeof n==='number' && Number.isFinite(n) && n>=1 && n<=2 && Math.abs(n*20-Math.round(n*20))<.0001;}
 async function prefsFor(){
   const stored=(await chrome.storage.local.get(KEY))[KEY]||{};
