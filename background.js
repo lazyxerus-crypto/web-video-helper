@@ -2,14 +2,14 @@
 // v6: Extension icon toggles overlay. Autoplay and auto-next are always on while enabled.
 const KEY = 'wvfs_v5_preferences';
 const tabKey = id => `wvfs_v5_tab_${id}`;
-const DEFAULTS = {active:false,speed:1.5};
+const DEFAULTS = {speed:1.5};
 const frames = new Map();
 const navLocks = new Set();
 const recentMoves = new Map();
 function validSpeed(n){return typeof n==='number' && Number.isFinite(n) && n>=1 && n<=2 && Math.abs(n*20-Math.round(n*20))<.0001;}
 async function prefsFor(){
   const stored=(await chrome.storage.local.get(KEY))[KEY]||{};
-  return {...DEFAULTS,active:!!stored.active,speed:validSpeed(stored.speed)?Math.round(stored.speed*20)/20:1.5};
+  return {...DEFAULTS,speed:validSpeed(stored.speed)?Math.round(stored.speed*20)/20:1.5};
 }
 async function updatePrefs(patch){
   const next={...await prefsFor(),...patch};
@@ -27,7 +27,7 @@ async function stateForReady(sender){
   let state=await stateFor(tabId);
   // On navigation to a different site, use the globally saved activation preference.
   if(!state || state.origin!==origin){
-    state={enabled:prefs.active,origin};
+    state={enabled:false,origin};
     await saveState(tabId,state);
   }
   return {...state,...prefs,enabled:state.enabled,origin};
@@ -36,8 +36,8 @@ async function toggle(tab){
   if(!tab?.id || !/^https?:/i.test(tab.url||''))return {ok:false};
   const old=await stateFor(tab.id), prefs=await prefsFor();
   const enabled=!(old?.enabled && old.origin===originOf(tab.url));
-  const nextPrefs=await updatePrefs({active:enabled});
-  const state={enabled,origin:originOf(tab.url),...nextPrefs};
+  
+  const state={enabled,origin:originOf(tab.url),...prefs};
   await saveState(tab.id,{enabled,origin:state.origin});
   frames.delete(tab.id);navLocks.delete(tab.id);
   await tellFrames(tab.id,{type:'WVFS_SETTINGS',state});
