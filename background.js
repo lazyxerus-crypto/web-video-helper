@@ -153,7 +153,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     }
     if(message?.type==='WVFS_COMMAND'){
       if(sender.frameId!==0)return {ok:false};
-      if(message.command!=='skip')return {ok:false};
+      if(!['skip','rewind5'].includes(message.command))return {ok:false};
       let chosen=pick(tabId);
       if(!chosen){await probe(tabId);chosen=pick(tabId);}
       if(!chosen)return {ok:false,error:'동영상을 찾지 못했습니다. 재생을 시작한 뒤 다시 눌러주세요.'};
