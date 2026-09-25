@@ -216,7 +216,13 @@ function scan(){
   if(TOP)controller?.update();
 }
 function settings(state){
-  if(enabled&&!state?.enabled)for(const v of allVideos())saveCheckpoint(v,true);
+  if(enabled&&!state?.enabled){
+    for(const v of allVideos()){
+      saveCheckpoint(v,true);
+      // A later click may reuse the same video node: fetch the checkpoint again.
+      resetResume(v);
+    }
+  }
   enabled=!!state?.enabled;
   const requested=Number(state?.speed);
   rate=Number.isFinite(requested)&&requested>=1&&requested<=2 ? Math.round(requested*20)/20 : 1.5;
