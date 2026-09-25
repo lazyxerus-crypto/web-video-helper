@@ -99,21 +99,10 @@ async function tryAutoplay(v){
       await v.play();
       attemptedAutoPlay.add(v);
     }catch(e){
-      if(e?.name!=='NotAllowedError'){
-        // 별도 이유(아직 로딩, 재생소스 교체 등)라면 다음 scan에서 재시도.
-        if(e?.name==='NotSupportedError')noAutoplay.add(v);
-        return;
-      }
-      // 오디오 자동재생은 브라우저 정책에 따라 차단될 수 있음.
-      // 음소거된 자동재생만 허용되면 영상을 끊기지 않게 재생한다.
-      v.muted=true;
-      try{
-        await v.play();
-        attemptedAutoPlay.add(v);
-        send({type:'WVFS_AUTOPLAY_MUTED'});
-      }catch(err){
-        if(err?.name==='NotAllowedError')noAutoplay.add(v);
-      }
+      if(e?.name==='NotSupportedError')noAutoplay.add(v);
+      // 소리 있는 자동재생이 Chrome 정책으로 거부되면 재시도만 중단한다.
+      // 음소거로 우회하거나 별도 알림을 띄우지 않는다.
+      if(e?.name==='NotAllowedError')noAutoplay.add(v);
     }
   }finally{
     autoPlayRunning.delete(v);
@@ -475,9 +464,6 @@ function makeControls(){
     if(shadow.activeElement!==$('speed'))$('speed').value=String(rate);
     $('speed-value').textContent=rate.toFixed(2)+'×';
   }
-  function noticeMuted(){
-    toast('크롬이 소리 있는 자동재생을 차단하여 음소거 재생했습니다. 소리는 영상 플레이어에서 켜 주세요.',10000);
-  }
   return {update,sync,noticeMuted};
 }
 chrome.runtime.onMessage.addListener((m,sender,respond)=>{
@@ -497,7 +483,6 @@ chrome.runtime.onMessage.addListener((m,sender,respond)=>{
   else if(m?.type==='WVFS_OHLI_LINK'&&TOP){respond(ohliLink(m.direction));}
   else if(m?.type==='WVFS_OHLI_NAVIGATE'&&TOP){respond(ohliNavigate(m.direction,m.url));}
   else if(m?.type==='WVFS_NATIVE_NAVIGATE'&&TOP){respond(nativeNavigate(m.direction,m.url));}
-  else if(m?.type==='WVFS_AUTOPLAY_NOTICE'&&TOP){controller?.noticeMuted();respond({ok:true});}
   else if(m?.type==='WVFS_MEDIA_COMMAND'){
     if(!enabled){respond({ok:false,error:'비활성 상태입니다.'});return;}
     if(m.command==='skip')respond(skip());
