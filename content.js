@@ -29,7 +29,7 @@ function eligibleForResume(v){
     (areaOf(v)>=4000 || v.videoWidth>0);
 }
 function ensureResume(v){
-  if(!eligibleForResume(v))return Promise.resolve();
+  if(!eligibleForResume(v)||v.readyState<2)return Promise.resolve();
   if(resumeJobs.has(v))return resumeJobs.get(v);
   const generation=resumeGeneration.get(v)||0;
   const job=(async()=>{
@@ -92,6 +92,8 @@ async function tryAutoplay(v){
   if(!Number.isFinite(v.duration) && areaOf(v)<4000)return;
   autoPlayRunning.add(v);
   try{
+    await ensureResume(v);
+    if(!enabled||!v.isConnected||v.ended)return;
     speed(v);
     try{
       await v.play();
@@ -179,6 +181,10 @@ function listen(v){
   };
   ['play','playing','loadedmetadata','loadeddata','canplay','durationchange','seeking','seeked','emptied'].forEach(
     type=>v.addEventListener(type,()=>{onChange();if(type!=='seeking'&&type!=='seeked')tryAutoplay(v); }));
+  v.addEventListener('timeupdate',()=>saveCheckpoint(v));
+  v.addEventListener('pause',()=>saveCheckpoint(v,true));
+  v.addEventListener('seeked',()=>saveCheckpoint(v,true));
+  v.addEventListener('emptied',()=>resetResume(v));
   v.addEventListener('ratechange',()=>{
     if(enabled && Math.abs(v.playbackRate-rate)>.01)
       setTimeout(()=>{if(enabled)speed(v);},90);
@@ -187,7 +193,12 @@ function listen(v){
     if(!enabled||!v.ended||!playbackSeen.has(v))return;
     // 광고/짧은 클립은 제외. muted 상태에서도 완료 이벤트는 인정.
     if(!Number.isFinite(v.duration)||v.duration<60||v.currentTime<v.duration-5)return;
-    report()?.then(()=>send({type:'WVFS_ENDED'}));
+    finishedVideos.add(v);
+    const episode=resumeInfo.get(v)?.episode;
+    report()?.then(async()=>{
+      if(episode)await send({type:'WVFS_RESUME_COMPLETE',episode});
+      send({type:'WVFS_ENDED'});
+    });
   });
 }
 function scan(){
@@ -197,6 +208,7 @@ function scan(){
     if(enabled){
       if(!v.paused&&!v.ended){playbackSeen.add(v);attemptedAutoPlay.add(v);}
       speed(v);
+      ensureResume(v);
       tryAutoplay(v);
     }
   }
@@ -204,6 +216,7 @@ function scan(){
   if(TOP)controller?.update();
 }
 function settings(state){
+  if(enabled&&!state?.enabled)for(const v of allVideos())saveCheckpoint(v,true);
   enabled=!!state?.enabled;
   const requested=Number(state?.speed);
   rate=Number.isFinite(requested)&&requested>=1&&requested<=2 ? Math.round(requested*20)/20 : 1.5;
@@ -435,6 +448,11 @@ chrome.runtime.onMessage.addListener((m,sender,respond)=>{
     else if(m.command==='rewind5')respond(rewind5());
     else respond({ok:false});
   }
+});
+// Best effort on tab close/reload; frequent checkpoints cover cases where
+// a document is torn down before its final message can be delivered.
+addEventListener('pagehide',()=>{
+  if(enabled)for(const v of allVideos())saveCheckpoint(v,true);
 });
 // Apply changed preferences to already-open tabs as well as newly opened episode pages.
 chrome.storage.onChanged.addListener((changes,area)=>{
