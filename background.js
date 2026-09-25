@@ -85,7 +85,14 @@ async function toggle(tab){
   if(!tab?.id || !/^https?:/i.test(tab.url||''))return {ok:false};
   const old=await stateFor(tab.id), prefs=await prefsFor();
   const enabled=!(old?.enabled && old.origin===originOf(tab.url));
-  
+  if(!enabled){
+    // Flush the selected HTML5 player's last position BEFORE disabling
+    // messaging permissions; the periodic checkpoints are the fallback.
+    const ids=[...(frames.get(tab.id)?.entries()||[])]
+      .filter(([,report])=>report.videos>0).map(([frameId])=>frameId);
+    await Promise.all(ids.map(frameId=>dispatch(tab.id,
+      {type:'WVFS_CHECKPOINT_FLUSH'},{frameId}).catch(()=>null)));
+  }
   const state={enabled,origin:originOf(tab.url),...prefs};
   await saveState(tab.id,{enabled,origin:state.origin});
   frames.delete(tab.id);navLocks.delete(tab.id);
