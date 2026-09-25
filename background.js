@@ -12,6 +12,7 @@ const RESUME_PREFIX = 'wvfs_resume_v1:';
 const RESUME_MAX = 250;
 const RESUME_MAX_AGE = 120*24*60*60*1000;
 const resumeWrites = new Map();
+const completedEpisodes = new Map();
 let lastResumePrune = 0;
 function episodeKey(href){
   try{
@@ -193,6 +194,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message?.type==='WVFS_RESUME_SAVE'){
       const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
       if(!episode||!key||message.episode!==episode)return {ok:false};
+      if(completedEpisodes.has(tabId+'|'+episode))return {ok:false};
       const position=Number(message.position),duration=Number(message.duration);
       if(!Number.isFinite(position)||!Number.isFinite(duration)||duration<60||
          position<5||position>=duration-3)return {ok:false};
@@ -205,6 +207,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message?.type==='WVFS_RESUME_COMPLETE'){
       const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
       if(!episode||!key||message.episode!==episode)return {ok:false};
+      completedEpisodes.set(tabId+'|'+episode,Date.now());
       await queueResumeWrite(key,()=>chrome.storage.local.remove(key));
       return {ok:true};
     }
@@ -256,6 +259,14 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
 });
 chrome.tabs.onUpdated.addListener((id,change,tab)=>{
   if(change.status==='loading'){frames.delete(id);navLocks.delete(id);}
+  if(change.url){
+    // A new SPA episode may reuse the same <video> node; refresh its
+    // resolved watch URL before new checkpoint/restore operations.
+    for(const key of completedEpisodes.keys()){
+      if(key.startsWith(id+'|'))completedEpisodes.delete(key);
+    }
+    tellFrames(id,{type:'WVFS_EPISODE_CHANGED'}).catch(()=>{});
+  }
   if(change.url || change.status==='complete'){
     stateFor(id).then(s=>{
       if(s?.enabled&&tab.url&&originOf(tab.url)!==s.origin){
@@ -267,5 +278,8 @@ chrome.tabs.onUpdated.addListener((id,change,tab)=>{
 });
 chrome.tabs.onRemoved.addListener(id=>{
   frames.delete(id);navLocks.delete(id);recentMoves.delete(id);
+  for(const key of completedEpisodes.keys()){
+    if(key.startsWith(id+'|'))completedEpisodes.delete(key);
+  }
   chrome.storage.session.remove(tabKey(id)).catch(()=>{});
 });
