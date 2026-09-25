@@ -205,16 +205,12 @@ function makeControls(){
   function pick(){
     const site=document.querySelector('#player-area .video-wrapper:has(iframe#video-player-iframe)');
     if(site&&visible(site)>4000)return site;
-    // Generic pages need a real visible HTML5 video, not an arbitrary
-    // iframe (ad frames and widgets are not video-player containers).
-    const video=allVideos().filter(v=>visible(v)>4000 && (
-      (Number.isFinite(v.duration)&&v.duration>=60) ||
-      (!v.paused && v.readyState>=2 && v.videoWidth>0)
-    )).sort((a,b)=>rank(b)-rank(a))[0];
-    return video ? (
-      video.closest('.html5-video-player,.jwplayer,.video-js,.plyr,.dplayer,.art-video-player') ||
-      video.parentElement
-    ) : null;
+    const video=bestVideo();
+    if(video&&visible(video)>4000)return video.closest('.html5-video-player,.jwplayer,.video-js,.plyr,.dplayer,.art-video-player')||video.parentElement;
+    return [...document.querySelectorAll('iframe')]
+      .filter(el=>visible(el)>4000 && !/adsbygoogle|google_ads/i.test(el.id||''))
+      .map(el=>({el,weight:visible(el)*(/player|embed|video|stream|play\.php/i.test(el.src)?3:1)}))
+      .sort((a,b)=>b.weight-a.weight)[0]?.el?.parentElement||null;
   }
   function expand(el){
     set(document.documentElement,'overflow','hidden');
