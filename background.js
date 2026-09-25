@@ -121,6 +121,23 @@ function changeSlug(href,direction){
   }catch{}
   return null;
 }
+// ani.ohli24.com uses the decoded episode title in /e/<title> and may mark
+// the final episode as "<N>화(完)". Prefer links already present on the page.
+function parseOhliEpisode(href){
+  try{
+    const u=new URL(href);
+    if(u.hostname!=='ani.ohli24.com'||!/^\/e\//.test(u.pathname))return null;
+    const label=decodeURIComponent(u.pathname.slice(3).replace(/\/$/,'')).trim();
+    const match=label.match(/^(.*?)\s+(\d+)\s*화\s*(?:\((完)\))?$/u);
+    if(!match)return null;
+    return {url:u.href,title:match[1].trim(),number:Number(match[2]),complete:!!match[3]};
+  }catch{return null;}
+}
+function validOhliLink(current,proposed,direction){
+  const a=parseOhliEpisode(current),b=parseOhliEpisode(proposed);
+  return !!a && !!b && a.title===b.title &&
+    b.number===a.number+direction && b.url.startsWith('https://ani.ohli24.com/e/');
+}
 // The DOM link is authored by the site's episode data: slugs need not be numbers.
 function validAdjacentLink(current,proposed){
   try{
@@ -144,6 +161,15 @@ async function adjacentURL(tabId,href,direction){
     // Site-ready or not: do not invent a slug when the site's data may use 04a etc.
     return {error:'사이트 회차 링크를 찾지 못했습니다. 플레이어가 로드된 뒤 다시 시도하세요.'};
   }
+  if(u.hostname==='ani.ohli24.com' && /^\/e\//.test(u.pathname)){
+    const result=await dispatch(tabId,{type:'WVFS_OHLI_LINK',direction},{frameId:0}).catch(()=>null);
+    if(result?.siteReady && !result.href)
+      return {error:direction===1?'이 작품의 다음 화가 없습니다.':'이 작품의 이전 화가 없습니다.'};
+    if(result?.href && validOhliLink(href,result.href,direction))
+      return {url:new URL(result.href,href).href,native:'ohli'};
+    if(result?.href)return {error:'회차 링크가 현재 작품과 맞지 않습니다.'};
+    return {error:'페이지에서 같은 작품의 해당 회차 링크를 찾지 못했습니다.'};
+  }
   const url=changeSlug(href,direction);
   return url?{url,native:false}:{error:'사이트에 다음/이전 회차 링크가 없고 숫자 회차도 아닙니다.'};
 }
@@ -159,7 +185,8 @@ async function advance(tabId,href,direction=1){
   navLocks.add(tabId);recentMoves.set(tabId,{at:Date.now(),from:href,to:adjacent.url});frames.delete(tabId);
   try{
     if(adjacent.native){
-      const clicked=await dispatch(tabId,{type:'WVFS_NATIVE_NAVIGATE',direction,url:adjacent.url},{frameId:0}).catch(()=>null);
+      const messageType=adjacent.native==='ohli'?'WVFS_OHLI_NAVIGATE':'WVFS_NATIVE_NAVIGATE';
+      const clicked=await dispatch(tabId,{type:messageType,direction,url:adjacent.url},{frameId:0}).catch(()=>null);
       if(clicked?.ok){
         setTimeout(()=>navLocks.delete(tabId),1700);
         return {ok:true,url:adjacent.url};
