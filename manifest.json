@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "웹 영상 도우미: 배속 · 전체화면 · 연속재생",
-  "version": "6.1.3",
+  "version": "6.1.4",
   "description": "이어보기 · ani.ohli24.com 회차 규칙 · 5초 뒤로·85초 스킵·이전/다음 화 · 배속 · 소리 있는 자동재생 우선 · 필요 시 무음 fallback 후 소리 복구 시도",
   "permissions": [
     "storage",
