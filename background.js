@@ -191,6 +191,10 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message?.type==='WVFS_RESUME_GET'){
       const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
       if(!episode||!key)return {ok:false};
+      const completedKey=tabId+'|'+episode;
+      if(completedEpisodes.has(completedKey) &&
+         completedEpisodes.get(completedKey)!==sender.documentId)
+        completedEpisodes.delete(completedKey);
       await resumeWrites.get(key)?.catch(()=>{});
       const saved=(await chrome.storage.local.get(key))[key];
       const fresh=saved && Number.isFinite(saved.position) &&
@@ -201,7 +205,11 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message?.type==='WVFS_RESUME_SAVE'){
       const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
       if(!episode||!key||message.episode!==episode)return {ok:false};
-      if(completedEpisodes.has(tabId+'|'+episode))return {ok:false};
+      const completedKey=tabId+'|'+episode;
+      if(completedEpisodes.has(completedKey)){
+        if(completedEpisodes.get(completedKey)===sender.documentId)return {ok:false};
+        completedEpisodes.delete(completedKey);
+      }
       const position=Number(message.position),duration=Number(message.duration);
       if(!Number.isFinite(position)||!Number.isFinite(duration)||duration<60||
          position<5||position>=duration-3)return {ok:false};
@@ -214,7 +222,7 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(message?.type==='WVFS_RESUME_COMPLETE'){
       const episode=episodeKey(sender.tab.url),key=resumeStorageKey(sender.tab.url);
       if(!episode||!key||message.episode!==episode)return {ok:false};
-      completedEpisodes.set(tabId+'|'+episode,Date.now());
+      completedEpisodes.set(tabId+'|'+episode,sender.documentId);
       await queueResumeWrite(key,()=>chrome.storage.local.remove(key));
       return {ok:true};
     }
@@ -265,7 +273,13 @@ chrome.runtime.onMessage.addListener((message,sender,respond)=>{
   return true;
 });
 chrome.tabs.onUpdated.addListener((id,change,tab)=>{
-  if(change.status==='loading'){frames.delete(id);navLocks.delete(id);}
+  if(change.status==='loading'){
+    frames.delete(id);navLocks.delete(id);
+    // A full reload of the same episode is a fresh viewing session.
+    for(const key of completedEpisodes.keys()){
+      if(key.startsWith(id+'|'))completedEpisodes.delete(key);
+    }
+  }
   if(change.url){
     // A new SPA episode may reuse the same <video> node; refresh its
     // resolved watch URL before new checkpoint/restore operations.
