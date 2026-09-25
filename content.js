@@ -153,6 +153,18 @@ function settings(state){
     if(!timer)timer=setInterval(scan,1700);
   });
 }
+function rewind5(){
+  const v=bestVideo();
+  if(!v)return {ok:false,error:'현재 프레임에서 HTML5 동영상을 찾지 못했습니다.'};
+  try{
+    const start=v.seekable.length?v.seekable.start(0):0;
+    const destination=Math.max(0,start,v.currentTime-5);
+    if(destination>=v.currentTime-.05)return {ok:false,error:'영상의 시작 부분입니다.'};
+    v.currentTime=destination;
+    setTimeout(report,150);
+    return {ok:true,message:'5초 뒤로 이동 완료'};
+  }catch{return {ok:false,error:'이 영상은 현재 위치 이동을 허용하지 않습니다.'};}
+}
 function skip(){
   const v=bestVideo();
   if(!v)return {ok:false,error:'현재 프레임에서 HTML5 동영상을 찾지 못했습니다.'};
@@ -278,6 +290,7 @@ function makeControls(){
       padding:11px;font:12px system-ui,sans-serif}
   </style>
   <div class="bar">
+    <button id="rewind">⏪ -5초</button>
     <button id="skip">⏩ 85초</button>
     <button id="prev">⏮ 이전 화</button>
     <button id="next">⏭ 다음 화</button>
@@ -289,6 +302,10 @@ function makeControls(){
     const el=$('msg');el.textContent=message;el.style.display='block';
     clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.style.display='none',duration);
   }
+  $('rewind').onclick=async()=>{
+    const r=await send({type:'WVFS_COMMAND',command:'rewind5'});
+    if(!r?.ok)toast(r?.error||'5초 뒤로 이동하지 못했습니다.');
+  };
   $('skip').onclick=async()=>{
     const r=await send({type:'WVFS_COMMAND',command:'skip'});
     if(!r?.ok)toast(r?.error||'85초 이동에 실패했습니다.');
@@ -341,6 +358,7 @@ chrome.runtime.onMessage.addListener((m,sender,respond)=>{
   else if(m?.type==='WVFS_MEDIA_COMMAND'){
     if(!enabled){respond({ok:false,error:'비활성 상태입니다.'});return;}
     if(m.command==='skip')respond(skip());
+    else if(m.command==='rewind5')respond(rewind5());
     else respond({ok:false});
   }
 });
